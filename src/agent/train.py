@@ -200,7 +200,7 @@ class TrainAgent:
             self.run_eval = cfg.data.get("val", False)
             if self.run_eval:
                 cfg_data_val = OmegaConf.merge(cfg.data.train, cfg.data.val)
-                self.val_dataiterator = _fake_batch_generator(self, n=16)
+                self.val_dataiterator = _fake_batch_generator(self)
                 self.eval_freq = cfg.eval_freq
                 self.per_device_num_eval_batch = (
                         cfg.eval_size // cfg.per_device_batch_size // world_size

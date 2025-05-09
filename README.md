@@ -16,6 +16,25 @@ This guide shows how to run the PiZero training script using randomly generated 
 
 ---
 
+### 🛠️ Enable Fake Data Generation
+
+To use synthetic data instead of real datasets during training, set the following in your config YAML file (e.g., `funetine.yaml`):
+
+```yaml
+data:
+  train:
+    dataset_mix: random
+```
+## 🧪 Finetune with SLURM Script
+
+To execute the training locally using RTX 3090 GPU:
+
+```bash
+bash slurm/test_training_single_gpu_no_slurm.sh
+```
+
+
+
 ## 🚀 Code
 
 ### 1. Modify `train.py`
@@ -29,7 +48,7 @@ for batch in self.train_dataloader:
 batch = generate_fake_batch()
 </code></pre>
 
-### 2. Freeze VLM and Train Only the Action Expert
+### 1. Freeze VLM and Train Only the Action Expert
 
 To only fine-tune the **Action Expert**, and freeze the VLM, update your config (e.g., `fractal.yaml`) with:
 
@@ -55,13 +74,6 @@ You will not see
 
 ---
 
-## 🧪 Finetune with SLURM Script
-
-To execute the training locally using RTX 3090 GPU:
-
-```bash
-bash slurm/test_training_single_gpu_no_slurm.sh
-```
 
 
 ## 🧩 Synthetic Data Format
@@ -86,6 +98,37 @@ task: 'language_instruction',
 action (torch.Size([bsz, window, horizon, action_dim], float32)
 action_pad_mask (torch.Size([bsz, window, horizon, action_dim]))
 """
+```
+The following function is used to generate such fake data:
+```python
+def generate_fake_batch(batch_size=8, window=1, horizon=4, action_dim=7, proprio_dim=8, height=224, width=224):
+    return {
+        "observation": {
+            "image_primary": torch.randint(0, 256, (batch_size, window, height, width, 3), dtype=torch.uint8),
+            "proprio": torch.randn(batch_size, window, proprio_dim),
+            "timestep": torch.randint(0, 100, (batch_size, window), dtype=torch.int32),
+            "pad_mask_dict": {
+                "image_primary": torch.ones(batch_size, window, dtype=torch.bool),
+                "proprio": torch.ones(batch_size, window, dtype=torch.bool),
+                "timestep": torch.ones(batch_size, window, dtype=torch.bool),
+            },
+            "timestep_pad_mask": torch.ones(batch_size, window, dtype=torch.bool),
+            "task_completed": torch.randint(0, 2, (batch_size, window, horizon), dtype=torch.bool),
+        },
+        "task": {
+            "language_instruction": [
+                random.choice([
+                    b"pick banana from white bowl",
+                    b"place green can",
+                    b"close middle drawer",
+                    b"move redbull near chip bag",
+                ]) for _ in range(batch_size)
+            ]
+        },
+        "action": torch.randn(batch_size, window, horizon, action_dim),
+        "action_pad_mask": torch.ones(batch_size, window, horizon, action_dim, dtype=torch.bool),
+        "dataset_name": ["dummy_dataset"] * batch_size,
+    }
 ```
 
 ### Training Visualization
