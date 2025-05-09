@@ -30,9 +30,50 @@ from src.utils.monitor import (
     log_execution_time,
 )
 from src.utils.optim import CosineAnnealingWarmupRestarts, get_num_params_in_billions
+import random
+
+
+
+
 
 log = logging.getLogger(__name__)
 
+
+def generate_fake_batch(batch_size=8, window=1, horizon=4, action_dim=7, proprio_dim=8, height=224, width=224):
+    """
+    batch: dict with keys 'observation', 'task', 'action', 'dataset_name', 'action_pad_mask'
+                observation: 'image_primary' (torch.Size([bsz, 1, H, W, 3], uint8), 'image_wrist', 'timestep' (torch.Size([bsz, 1])), 'pad_mask_dict', 'timestep_pad_mask', 'task_completed' (torch.Size([bsz, window, 4]), 'proprio' (torch.Size([bsz, window, proprio_dim])
+                task: 'language_instruction', 'pad_mask_dict', 'image_primary', 'image_wrist', 'timestep' (torch.Size([bsz]))
+                action (torch.Size([bsz, window, horizon, action_dim], float32)
+                action_pad_mask (torch.Size([bsz, window, horizon, action_dim]))
+    """
+    return {
+        "observation": {
+            "image_primary": torch.randint(0, 256, (batch_size, window, height, width, 3), dtype=torch.uint8),
+            "proprio": torch.randn(batch_size, window, proprio_dim),  # float32
+            "timestep": torch.randint(0, 100, (batch_size, window), dtype=torch.int32),
+            "pad_mask_dict": {
+                "image_primary": torch.ones(batch_size, window, dtype=torch.bool),
+                "proprio": torch.ones(batch_size, window, dtype=torch.bool),
+                "timestep": torch.ones(batch_size, window, dtype=torch.bool),
+            },
+            "timestep_pad_mask": torch.ones(batch_size, window, dtype=torch.bool),
+            "task_completed": torch.randint(0, 2, (batch_size, window, horizon), dtype=torch.bool),
+        },
+        "task": {
+            "language_instruction": [
+                random.choice([
+                    b"pick banana from white bowl",
+                    b"place green can",
+                    b"close middle drawer",
+                    b"move redbull near chip bag",
+                ]) for _ in range(batch_size)
+            ]
+        },
+        "action": torch.randn(batch_size, window, horizon, action_dim),
+        "action_pad_mask": torch.ones(batch_size, window, horizon, action_dim, dtype=torch.bool),
+        "dataset_name": ["dummy_dataset"] * batch_size,
+    }
 
 class TrainAgent:
     def __init__(self, cfg):
@@ -140,11 +181,12 @@ class TrainAgent:
         )
 
         # dataloader --- spawn one for each rank, num_workers=0
-        self.train_dataloader = DataLoader(
-            TorchRLDSInterleavedDataset(cfg.data.train, train=True).dataset,
-            batch_size=cfg.per_device_batch_size,
-            pin_memory=True,
-        )
+        if cfg.data.train.dataset_mix != "random":
+            self.train_dataloader = DataLoader(
+                TorchRLDSInterleavedDataset(cfg.data.train, train=True).dataset,
+                batch_size=cfg.per_device_batch_size,
+                pin_memory=True,
+            )
         self.run_eval = cfg.data.get("val", False)
         if self.run_eval:
             cfg_data_val = OmegaConf.merge(cfg.data.train, cfg.data.val)
@@ -187,6 +229,7 @@ class TrainAgent:
             f"Number of trained parameters (Action): {get_num_params_in_billions(self.action_optimizer):.3f}B"
         )
         if self.train_vlm:
+            
             if cfg.lora:
                 vlm_trained_parameters = model.lora_trainable_vlm_parameters
             else:
@@ -323,6 +366,7 @@ class TrainAgent:
                 action (torch.Size([bsz, window, horizon, action_dim], float32)
                 action_pad_mask (torch.Size([bsz, window, horizon, action_dim]))
                 """
+                batch = generate_fake_batch()
                 inputs = preprocess_batch(batch, split_mask=False, sample_fm_time=True)
                 if self.debug and cnt_batch == 0:
                     images = batch["observation"]["image_primary"]
@@ -401,7 +445,9 @@ class TrainAgent:
                         self.save_training(
                             cnt_update, cnt_batch, main_rank=self.main_rank
                         )
-                        dist.barrier()
+                        import torch.distributed as dist
+                        if dist.is_available() and dist.is_initialized():
+                            dist.barrier()
 
                 # aggregate loss
                 if self.multi_gpu:

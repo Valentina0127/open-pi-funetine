@@ -9,11 +9,11 @@
 # first batch will take a while with torch.compile as model being compiled
 CUDA_VISIBLE_DEVICES=0 HYDRA_FULL_ERROR=1 uv run \
     scripts/run.py \
-    --config-name=bridge \
+    --config-name=finetune \
     device=cuda:0 \
     debug=True \
     wandb=null \
-    log_dir=results/test/ \
+    log_dir=results/no_vlm/ \
     global_batch_size=16 \
     per_device_batch_size=8 \
     flow_sampling=beta \

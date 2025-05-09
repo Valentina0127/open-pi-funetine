@@ -33,7 +33,7 @@ HYDRA_FULL_ERROR=1 uv run torchrun \
   --standalone \
   --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
   scripts/run.py \
-  --config-name=bridge \
+  --config-name=finetune \
   action_lr=0.00005 \
   vlm_lr=0.00005 \
   flow_sampling=beta \

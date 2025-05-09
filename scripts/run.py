@@ -15,6 +15,11 @@ import pretty_errors
 import torch
 from omegaconf import OmegaConf, open_dict
 
+import torch
+torch.cuda.empty_cache()
+torch.cuda.ipc_collect()
+
+
 # dummy
 print(pretty_errors.__version__)
 
@@ -70,7 +75,7 @@ def _main(cfg: OmegaConf):
 @hydra.main(
     version_base=None,
     config_path=os.path.join(os.getcwd(), "config/train"),
-    config_name="bridge.yaml",
+    config_name="finetune.yaml",
 )  # defaults
 def main(cfg: OmegaConf):
     _main(cfg)
