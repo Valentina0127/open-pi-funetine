@@ -16,7 +16,7 @@ This guide shows how to run the PiZero training script using randomly generated 
 
 ---
 
-### 🛠️ Enable Fake Data Generation
+## 🛠️ Enable Fake Data Generation
 
 To use synthetic data instead of real datasets during training, set the following in your config YAML file (e.g., `funetine.yaml`):
 
@@ -35,22 +35,9 @@ bash slurm/test_training_single_gpu_no_slurm.sh
 
 
 
-## 🚀 Code
+## 🚀 Freeze VLM and Train Only the Action Expert
 
-### 1. Modify `train.py`
-
-Replace the real dataloader with synthetic data generation by editing the main training loop:
-
-<pre><code class="language-python"># Replace this line inside TrainAgent.run()
-for batch in self.train_dataloader:
-
-# With:
-batch = generate_fake_batch()
-</code></pre>
-
-### 1. Freeze VLM and Train Only the Action Expert
-
-To only fine-tune the **Action Expert**, and freeze the VLM, update your config (e.g., `fractal.yaml`) with:
+To only fine-tune the **Action Expert**, and freeze the VLM, update your config (e.g., `finetune.yaml`) with:
 
 <pre><code class="language-yaml">train_vlm: False
 </code></pre>
