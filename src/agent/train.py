@@ -75,6 +75,20 @@ def generate_fake_batch(batch_size=8, window=1, horizon=4, action_dim=7, proprio
         "dataset_name": ["dummy_dataset"] * batch_size,
     }
 
+def _fake_batch_generator(self, n=1024):
+    for i in range(n):
+        yield generate_fake_batch(
+            batch_size=self.cfg.per_device_batch_size,
+            window=1,
+            horizon=self.cfg.horizon_steps,
+            action_dim=self.cfg.action_dim,
+            proprio_dim=self.cfg.proprio_dim,
+            height=224,
+            width=224,
+        )
+
+
+
 class TrainAgent:
     def __init__(self, cfg):
         # device setup
@@ -181,27 +195,39 @@ class TrainAgent:
         )
 
         # dataloader --- spawn one for each rank, num_workers=0
-        if cfg.data.train.dataset_mix != "random":
+        if cfg.data.train.dataset_mix == "random":
+            self.train_dataloader = None
+            self.run_eval = cfg.data.get("val", False)
+            if self.run_eval:
+                cfg_data_val = OmegaConf.merge(cfg.data.train, cfg.data.val)
+                self.val_dataiterator = _fake_batch_generator(self, n=16)
+                self.eval_freq = cfg.eval_freq
+                self.per_device_num_eval_batch = (
+                        cfg.eval_size // cfg.per_device_batch_size // world_size
+                    )
+                self.eval_thresholds = cfg.eval_thresholds
+            log.info("Using randomly generated fake data for training.")
+        else:
             self.train_dataloader = DataLoader(
                 TorchRLDSInterleavedDataset(cfg.data.train, train=True).dataset,
                 batch_size=cfg.per_device_batch_size,
                 pin_memory=True,
             )
-        self.run_eval = cfg.data.get("val", False)
-        if self.run_eval:
-            cfg_data_val = OmegaConf.merge(cfg.data.train, cfg.data.val)
-            self.val_dataiterator = iter(
-                DataLoader(
-                    TorchRLDSInterleavedDataset(cfg_data_val, train=False).dataset,
-                    batch_size=cfg.per_device_batch_size,
-                    pin_memory=True,
+            self.run_eval = cfg.data.get("val", False)
+            if self.run_eval:
+                cfg_data_val = OmegaConf.merge(cfg.data.train, cfg.data.val)
+                self.val_dataiterator = iter(
+                    DataLoader(
+                        TorchRLDSInterleavedDataset(cfg_data_val, train=False).dataset,
+                        batch_size=cfg.per_device_batch_size,
+                        pin_memory=True,
+                    )
                 )
-            )
-            self.eval_thresholds = cfg.eval_thresholds
-            self.eval_freq = cfg.eval_freq
-            self.per_device_num_eval_batch = (
-                cfg.eval_size // cfg.per_device_batch_size // world_size
-            )
+                self.eval_thresholds = cfg.eval_thresholds
+                self.eval_freq = cfg.eval_freq
+                self.per_device_num_eval_batch = (
+                    cfg.eval_size // cfg.per_device_batch_size // world_size
+                )
         log.info(f"Total number of gradient updates: {self.n_updates}")
         log.info(f"Global batch size: {actual_global_batch_size}")
         log.info(f"Per device batch size: {cfg.per_device_batch_size}")
@@ -357,8 +383,15 @@ class TrainAgent:
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             return inputs
 
+
+        if self.cfg.data.train.dataset_mix == "random":
+            self.batch_iterator = _fake_batch_generator(self)
+            log.info("Using randomly generated fake data for training.")
+        else:
+            self.batch_iterator = iter(self.train_dataloader)
+
         while 1:
-            for batch in self.train_dataloader:
+            for batch in self.batch_iterator:
                 """
                 batch: dict with keys 'observation', 'task', 'action', 'dataset_name', 'action_pad_mask'
                 observation: 'image_primary' (torch.Size([bsz, 1, H, W, 3], uint8), 'image_wrist', 'timestep' (torch.Size([bsz, 1])), 'pad_mask_dict', 'timestep_pad_mask', 'task_completed' (torch.Size([bsz, window, 4]), 'proprio' (torch.Size([bsz, window, proprio_dim])

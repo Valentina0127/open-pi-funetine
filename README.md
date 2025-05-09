@@ -92,4 +92,4 @@ action_pad_mask (torch.Size([bsz, window, horizon, action_dim]))
 
 This figure shows the training result using fake data and VLM frozen.
 
-![Training visualization](results/no_vlm/image_0.png)
+![Training visualization](image_0.png)

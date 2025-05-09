@@ -39,7 +39,7 @@ data:
     split:  # full val split
     shuffle_buffer_size: 10000
   train:
-    dataset_mix: fractal
+    dataset_mix: random
     split: train
     data_path: /mnt/NAS/home/bc4211/open-pi-zero/data/resize_224
     window_size: ${cond_steps}

@@ -81,7 +81,6 @@ OXE_MAGIC_SOUP = [
     ("cmu_stretch", 1.0),
 ]
 
-
 OXE_FLEX_ACT_SOUP = [
     ("fractal20220817_data", 0.54087122203),
     ("kuka", 0.8341046294),
@@ -175,6 +174,10 @@ OXE_FULL_MIX = [
     ("gnm_dataset", 1.0),
 ]
 
+RANDOM = [
+    ("random", 1.0)
+]
+
 OXE_NAMED_MIXES = {
     "bridge": BRIDGE_MIX,
     "fractal": FRACTAL_MIX,
@@ -183,4 +186,5 @@ OXE_NAMED_MIXES = {
     "oxe_magic_soup": OXE_MAGIC_SOUP,
     "oxe_flex_act_soup": OXE_FLEX_ACT_SOUP,
     "oxe_simple": OXE_SIMPLE,
+    "random": RANDOM
 }

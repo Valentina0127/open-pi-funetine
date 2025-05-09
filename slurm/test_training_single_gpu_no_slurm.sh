@@ -7,13 +7,13 @@
 # try saving model
 
 # first batch will take a while with torch.compile as model being compiled
-CUDA_VISIBLE_DEVICES=0 HYDRA_FULL_ERROR=1 uv run \
+CUDA_VISIBLE_DEVICES=1 HYDRA_FULL_ERROR=1 uv run \
     scripts/run.py \
     --config-name=finetune \
     device=cuda:0 \
     debug=True \
     wandb=null \
-    log_dir=results/no_vlm/ \
+    log_dir=results/fake_data_finetune \
     global_batch_size=16 \
     per_device_batch_size=8 \
     flow_sampling=beta \

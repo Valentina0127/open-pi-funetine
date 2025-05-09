@@ -35,71 +35,72 @@ def make_oxe_dataset_kwargs(
         force_recompute_dataset_statistics: If True, recompute dataset statistics.
         action_proprio_normalization_type: Normalization type to use for proprioceptive actions.
     """
-    dataset_kwargs = copy.deepcopy(OXE_DATASET_CONFIGS[name])
+    if OXE_DATASET_CONFIGS[name] != "random":
+        dataset_kwargs = copy.deepcopy(OXE_DATASET_CONFIGS[name])
 
-    if dataset_kwargs["action_encoding"] is ActionEncoding.EEF_POS:
-        # with EEF_POS actions, the last action dimension is gripper
-        dataset_kwargs["action_normalization_mask"] = [True] * 6 + [False]
-    elif dataset_kwargs["action_encoding"] is ActionEncoding.JOINT_POS:
-        # with JOINT_POS actions, last dimension is gripper
-        dataset_kwargs["action_normalization_mask"] = [True] * 7 + [False]
-    elif dataset_kwargs["action_encoding"] is ActionEncoding.JOINT_POS_BIMANUAL:
-        # with JOINT_POS_BIMANUAL actions, 7th and 14th dimension are gripper
-        dataset_kwargs["action_normalization_mask"] = (
-            [True] * 6 + [False] + [True] * 6 + [False]
+        if dataset_kwargs["action_encoding"] is ActionEncoding.EEF_POS:
+            # with EEF_POS actions, the last action dimension is gripper
+            dataset_kwargs["action_normalization_mask"] = [True] * 6 + [False]
+        elif dataset_kwargs["action_encoding"] is ActionEncoding.JOINT_POS:
+            # with JOINT_POS actions, last dimension is gripper
+            dataset_kwargs["action_normalization_mask"] = [True] * 7 + [False]
+        elif dataset_kwargs["action_encoding"] is ActionEncoding.JOINT_POS_BIMANUAL:
+            # with JOINT_POS_BIMANUAL actions, 7th and 14th dimension are gripper
+            dataset_kwargs["action_normalization_mask"] = (
+                [True] * 6 + [False] + [True] * 6 + [False]
+            )
+        elif dataset_kwargs["action_encoding"] is ActionEncoding.NAV_2D:
+            # with NAV_2D actions, all dimensions are deltas
+            dataset_kwargs["action_normalization_mask"] = [True] * 2
+        elif dataset_kwargs["action_encoding"] is ActionEncoding.JOINT_POS_BIMANUAL_NAV:
+            # with JOINT_POS_BIMANUAL_NAV actions, 7th and 14th dimension are gripper
+            dataset_kwargs["action_normalization_mask"] = (
+                [True] * 6 + [False] + [True] * 6 + [False] + [True] * 2
+            )
+        else:
+            raise ValueError(
+                f"Cannot load {name} with unsupported action encoding {dataset_kwargs['action_encoding']}."
+            )
+
+        # adjust loaded camera views
+        if missing_keys := (set(load_camera_views) - set(dataset_kwargs["image_obs_keys"])):
+            raise ValueError(
+                f"Cannot load {name} with views {missing_keys} since they are not available."
+            )
+        dataset_kwargs["image_obs_keys"] = {
+            k: v
+            for k, v in dataset_kwargs["image_obs_keys"].items()
+            if k in load_camera_views
+        }
+        dataset_kwargs["depth_obs_keys"] = {
+            k: v
+            for k, v in dataset_kwargs["depth_obs_keys"].items()
+            if k in load_camera_views
+        }
+
+        if not load_depth:
+            dataset_kwargs.pop("depth_obs_keys")
+        if load_proprio:
+            dataset_kwargs["proprio_obs_key"] = "proprio"
+        if load_language:
+            dataset_kwargs["language_key"] = "language_instruction"
+
+        dataset_kwargs["action_proprio_normalization_type"] = (
+            action_proprio_normalization_type
         )
-    elif dataset_kwargs["action_encoding"] is ActionEncoding.NAV_2D:
-        # with NAV_2D actions, all dimensions are deltas
-        dataset_kwargs["action_normalization_mask"] = [True] * 2
-    elif dataset_kwargs["action_encoding"] is ActionEncoding.JOINT_POS_BIMANUAL_NAV:
-        # with JOINT_POS_BIMANUAL_NAV actions, 7th and 14th dimension are gripper
-        dataset_kwargs["action_normalization_mask"] = (
-            [True] * 6 + [False] + [True] * 6 + [False] + [True] * 2
-        )
-    else:
-        raise ValueError(
-            f"Cannot load {name} with unsupported action encoding {dataset_kwargs['action_encoding']}."
+        dataset_kwargs["skip_norm"] = skip_norm
+
+        del dataset_kwargs["proprio_encoding"]
+        del dataset_kwargs["action_encoding"]
+
+        dataset_kwargs["standardize_fn"] = ModuleSpec.create(
+            OXE_STANDARDIZATION_TRANSFORMS[name]
         )
 
-    # adjust loaded camera views
-    if missing_keys := (set(load_camera_views) - set(dataset_kwargs["image_obs_keys"])):
-        raise ValueError(
-            f"Cannot load {name} with views {missing_keys} since they are not available."
-        )
-    dataset_kwargs["image_obs_keys"] = {
-        k: v
-        for k, v in dataset_kwargs["image_obs_keys"].items()
-        if k in load_camera_views
-    }
-    dataset_kwargs["depth_obs_keys"] = {
-        k: v
-        for k, v in dataset_kwargs["depth_obs_keys"].items()
-        if k in load_camera_views
-    }
+        if force_recompute_dataset_statistics:
+            dataset_kwargs["force_recompute_dataset_statistics"] = True
 
-    if not load_depth:
-        dataset_kwargs.pop("depth_obs_keys")
-    if load_proprio:
-        dataset_kwargs["proprio_obs_key"] = "proprio"
-    if load_language:
-        dataset_kwargs["language_key"] = "language_instruction"
-
-    dataset_kwargs["action_proprio_normalization_type"] = (
-        action_proprio_normalization_type
-    )
-    dataset_kwargs["skip_norm"] = skip_norm
-
-    del dataset_kwargs["proprio_encoding"]
-    del dataset_kwargs["action_encoding"]
-
-    dataset_kwargs["standardize_fn"] = ModuleSpec.create(
-        OXE_STANDARDIZATION_TRANSFORMS[name]
-    )
-
-    if force_recompute_dataset_statistics:
-        dataset_kwargs["force_recompute_dataset_statistics"] = True
-
-    return {"name": name, "data_dir": data_dir, **dataset_kwargs}
+        return {"name": name, "data_dir": data_dir, **dataset_kwargs}
 
 
 def make_oxe_dataset_kwargs_and_weights(
@@ -130,6 +131,9 @@ def make_oxe_dataset_kwargs_and_weights(
     Returns:
         Tuple of (dataset_kwargs_list, sampling weights).
     """
+    if data_mix == "random":
+        return [], []
+
     if isinstance(data_mix, str):
         data_mix = OXE_NAMED_MIXES[data_mix]
 
